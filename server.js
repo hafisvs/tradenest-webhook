@@ -21,7 +21,7 @@ app.post("/webhook", async (req, res) => {
     const paymentData = req.body;
 
     // Just a sample example of extracting email
-    const customerEmail = paymentData.email || "test@example.com";
+    const customerEmail = paymentData.email || "hafisvs6@gmail.com";
 
     // Replace these with your actual Gmail and App Password
     const transporter = nodemailer.createTransport({
