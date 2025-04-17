@@ -11,6 +11,11 @@ app.get("/", (req, res) => {
   res.send("Welcome to Tradenest Webhook Server");
 });
 
+
+app.post("/webhook", async (req, res) => {
+  res.send("Webhook received");
+});
+
 app.post("/webhook", async (req, res) => {
   try {
     const paymentData = req.body;
