@@ -49,7 +49,7 @@ app.post("/webhook", async (req, res) => {
       from: "tradenest99@gmail.com",
       to: customerEmail,
       subject: "Tradenest Course Purchase Receipt",
-      text: `Thank you for your payment! Your course link: https://drive.google.com/yourcourse`,
+      text: `Thank you for your payment! Your course link: https://drive.google.com/drive/folders/1k1e0dsJtN0WPDb9XWkA5obXWxMKkgome`,
     };
 
     const info = await transporter.sendMail(mailOptions);
