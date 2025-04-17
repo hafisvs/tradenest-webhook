@@ -7,23 +7,24 @@ const PORT = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
 
+// Home route
 app.get("/", (req, res) => {
   res.send("Welcome to Tradenest Webhook Server");
 });
 
-
-app.post("/webhook", async (req, res) => {
-  res.send("Webhook received");
-});
-
+// Webhook route
 app.post("/webhook", async (req, res) => {
   try {
     const paymentData = req.body;
 
-    // Just a sample example of extracting email
-    const customerEmail = paymentData.email || "hafisvs6@gmail.com";
+    // Extract email from payload
+  const customerEmail = paymentData.email;
 
-    // Replace these with your actual Gmail and App Password
+if (!customerEmail) {
+  return res.status(400).send("Email is required");
+}
+
+    // Configure nodemailer transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -39,6 +40,7 @@ app.post("/webhook", async (req, res) => {
       text: `Thank you for your payment! Here is your course link: https://drive.google.com/yourcourse`,
     };
 
+    // Send email
     await transporter.sendMail(mailOptions);
 
     console.log("Email sent to:", customerEmail);
@@ -49,6 +51,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
