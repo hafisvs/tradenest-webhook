@@ -16,36 +16,35 @@ app.get("/", (req, res) => {
 app.post("/webhook", async (req, res) => {
   try {
     const paymentData = req.body;
+    const customerEmail = paymentData.email;
 
-    // Extract email from payload
-  const customerEmail = paymentData.email;
+    if (!customerEmail) {
+      return res.status(400).send("Email is required");
+    }
 
-if (!customerEmail) {
-  return res.status(400).send("Email is required");
-}
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "tradenest99@gmail.com",
+        pass: "mkkc rpkc tvhy rfon",
+      },
+    });
 
-const nodemailer = require("nodemailer");
+    const mailOptions = {
+      from: "tradenest99@gmail.com",
+      to: customerEmail,
+      subject: "Tradenest Course Purchase Receipt",
+      text: "Thank you for your payment! Here is your course link: https://drive.google.com/yourcourse",
+    };
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "tradenest99@gmail.com",
-    pass: "mkkc rpkc tvhy rfon"
-  },
-});
+    await transporter.sendMail(mailOptions);
 
-const mailOptions = {
-  from: "tradenest99@gmail.com",
-  to: "hafisvs6@gmail.com",
-  subject: "Test Email",
-  text: "This is a test",
-};
-
-transporter.sendMail(mailOptions, (error, info) => {
-  if (error) {
-    return console.log("Error sending test email:", error);
+    console.log("Email sent to:", customerEmail);
+    res.status(200).send("Webhook received and email sent");
+  } catch (error) {
+    console.error("Error sending email:", error);
+    res.status(500).send("Server error");
   }
-  console.log("Test email sent:", info.response);
 });
 
 // Start server
