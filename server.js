@@ -16,7 +16,7 @@ app.get("/", (req, res) => {
 
 // Google Drive setup
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
-const CREDENTIALS_PATH = "credentials.json";
+const CREDENTIALS_PATH = '/etc/secrets/credentials.json';
 const FILE_ID = "1k1e0dsJtN0WPDb9XWkA5obXWxMKkgome"; // your folder/file ID
 
 function authorizeGoogleDrive() {
