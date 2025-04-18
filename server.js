@@ -70,16 +70,22 @@ function generateInvoice(data, filename) {
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    doc.fontSize(20).text("Tradenest Invoice", { align: "center" });
-    doc.moveDown();
+    // Title
+    doc.fontSize(24).font("Helvetica-Bold").text("Tradenest Invoice", { align: "center" });
+    doc.moveDown(1);
 
-    doc.fontSize(12).text(`Invoice ID: ${data.paymentId}`);
+    // Invoice ID
+    doc.fontSize(16).font("Helvetica").text(`Invoice ID: ${data.paymentId}`);
     doc.text(`Customer: ${data.name || "N/A"}`);
     doc.text(`Email: ${data.email}`);
     doc.text(`Amount: ₹${(data.amount / 100).toFixed(2)}`);
     doc.text(`Date: ${new Date().toLocaleDateString()}`);
     doc.text(`Status: ${data.status}`);
+    doc.moveDown(1);
     doc.text("Description: Course Purchase");
+    
+    doc.moveDown(2);
+    doc.text("Thank you for your purchase!", { align: "center" });
 
     doc.end();
 
@@ -136,7 +142,11 @@ app.post("/webhook", async (req, res) => {
     };
 
     await transporter.sendMail(mailOptions);
-    fs.unlinkSync(invoicePath); // delete file after sending
+    try {
+      fs.unlinkSync(invoicePath); // delete file after sending
+    } catch (err) {
+      console.error("Error deleting the invoice file:", err);
+    }
 
     console.log(`Email with invoice sent to ${email}`);
     res.status(200).send("Payment verified and invoice sent");
