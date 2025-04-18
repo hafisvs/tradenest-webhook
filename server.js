@@ -1,35 +1,50 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const fs = require("fs");
+const PDFDocument = require("pdfkit");
 const { google } = require("googleapis");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
+// Constants
+const RAZORPAY_WEBHOOK_SECRET = "razorpay_secret10";
+const FILE_ID = "1k1e0dsJtN0WPDb9XWkA5obXWxMKkgome";
+const CREDENTIALS_PATH = "/etc/secrets/credentials.json";
 
-// Home route
-app.get("/", (req, res) => {
-  res.send("Welcome to Tradenest Webhook Server");
-});
+// Razorpay webhook signature verification
+app.use(
+  "/webhook",
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      const signature = req.headers["x-razorpay-signature"];
+      const expected = crypto
+        .createHmac("sha256", RAZORPAY_WEBHOOK_SECRET)
+        .update(buf)
+        .digest("hex");
+      if (signature !== expected) {
+        throw new Error("Invalid Razorpay signature");
+      }
+    },
+  })
+);
 
-// Google Drive setup
-const SCOPES = ["https://www.googleapis.com/auth/drive"];
-const CREDENTIALS_PATH = '/etc/secrets/credentials.json';
-const FILE_ID = "1k1e0dsJtN0WPDb9XWkA5obXWxMKkgome"; // your folder/file ID
-
+// Google Drive Authorization
 function authorizeGoogleDrive() {
   const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
   const { client_email, private_key } = credentials;
-  const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
+  const auth = new google.auth.JWT(client_email, null, private_key, [
+    "https://www.googleapis.com/auth/drive",
+  ]);
   return google.drive({ version: "v3", auth });
 }
 
 async function shareFileWithEmail(email) {
   const drive = authorizeGoogleDrive();
 
-  // Grant viewer access to email
   await drive.permissions.create({
     fileId: FILE_ID,
     requestBody: {
@@ -39,7 +54,6 @@ async function shareFileWithEmail(email) {
     },
   });
 
-  // Get the shareable link
   const { data } = await drive.files.get({
     fileId: FILE_ID,
     fields: "webViewLink",
@@ -48,80 +62,87 @@ async function shareFileWithEmail(email) {
   return data.webViewLink;
 }
 
-// Webhook route
+// Generate PDF Invoice
+function generateInvoice(data, filename) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument();
+    const filePath = path.join(__dirname, filename);
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    doc.fontSize(20).text("Tradenest Invoice", { align: "center" });
+    doc.moveDown();
+
+    doc.fontSize(12).text(`Invoice ID: ${data.paymentId}`);
+    doc.text(`Customer: ${data.name || "N/A"}`);
+    doc.text(`Email: ${data.email}`);
+    doc.text(`Amount: ₹${(data.amount / 100).toFixed(2)}`);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`);
+    doc.text(`Status: ${data.status}`);
+    doc.text("Description: Course Purchase");
+
+    doc.end();
+
+    stream.on("finish", () => resolve(filePath));
+    stream.on("error", reject);
+  });
+}
+
+// Razorpay webhook handler
 app.post("/webhook", async (req, res) => {
   try {
-    const paymentData = req.body;
-    console.log("Received payment data:", paymentData);
+    const payment = req.body.payload?.payment?.entity;
+    if (!payment || !payment.email) return res.status(400).send("Missing email");
 
-    const customerEmail = paymentData.email;
+    const email = payment.email;
+    const amount = payment.amount;
+    const paymentId = payment.id;
+    const status = payment.status;
+    const name = payment.notes?.name || "Customer";
 
-    if (!customerEmail) {
-      console.error("Email is missing in payload");
-      return res.status(400).send("Email is required");
-    }
+    const accessLink = await shareFileWithEmail(email);
+    const invoicePath = await generateInvoice({ email, amount, paymentId, status, name }, `invoice_${paymentId}.pdf`);
 
-    console.log("Customer email extracted:", customerEmail);
-
-    // Grant viewer access
-    const courseLink = await shareFileWithEmail(customerEmail);
-    console.log("Viewer access granted:", courseLink);
-
-    // Setup nodemailer transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: "tradenest99@gmail.com",
-        pass: "mkkc rpkc tvhy rfon", // App password
+        pass: "mkkc rpkc tvhy rfon",
       },
-    });
-
-    // Verify SMTP connection
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error("SMTP Authentication failed:", error);
-      } else {
-        console.log("SMTP Authentication success:", success);
-      }
     });
 
     const mailOptions = {
       from: "tradenest99@gmail.com",
-      to: customerEmail,
-      subject: "Welcome to Tradenest - Your Course Access",
+      to: email,
+      subject: "Your Tradenest Course Access & Invoice",
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
-          <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-            <h2 style="color: #333;">Thank You for Your Purchase!</h2>
-            <p style="font-size: 16px; color: #555;">
-              Hi there,<br><br>
-              We're excited to welcome you to <strong>Tradenest</strong>! You've successfully purchased our course. Click the button below to access your content:
+        <div style="font-family: Arial; background: #f9f9f9; padding: 20px;">
+          <div style="max-width: 600px; margin: auto; background: white; border-radius: 8px; padding: 30px;">
+            <h2 style="color: #333;">Thank You, ${name}!</h2>
+            <p>You have successfully purchased the Tradenest course.</p>
+            <p>
+              <a href="${accessLink}" style="background: #28a745; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">Access Course</a>
             </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${courseLink}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                Access Course
-              </a>
-            </div>
-            <p style="font-size: 14px; color: #888;">
-              If you have any questions or issues, feel free to contact us at tradenest99@gmail.com.<br><br>
-              Happy Learning!<br>
-              — The Tradenest Team
-            </p>
+            <p>Your invoice is attached with this email.</p>
           </div>
         </div>
       `,
+      attachments: [
+        {
+          filename: `invoice_${paymentId}.pdf`,
+          path: invoicePath,
+        },
+      ],
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
+    fs.unlinkSync(invoicePath); // delete file after sending
 
-    console.log("Email send success");
-    console.log("Sent to:", customerEmail);
-    console.log("Message ID:", info.messageId);
-
-    res.status(200).send("Webhook received and email sent to " + customerEmail);
-  } catch (error) {
-    console.error("Error sending email:", error);
-    res.status(500).send("Server error");
+    console.log(`Email with invoice sent to ${email}`);
+    res.status(200).send("Payment verified and invoice sent");
+  } catch (err) {
+    console.error("Webhook error:", err);
+    res.status(500).send("Webhook error: " + err.message);
   }
 });
 
