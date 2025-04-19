@@ -100,7 +100,14 @@ app.post("/webhook", async (req, res) => {
     const payment = req.body.payload?.payment?.entity;
     if (!payment || !payment.email) return res.status(400).send("Missing email");
 
-    const email = payment.email;
+    const notes = payment.notes || {};
+    const emailPrimary = notes.email1 || payment.email;
+    const emailSecondary = notes.email2 || "not provided";
+
+    console.log("Primary Email:", emailPrimary);
+    console.log("Secondary Email:", emailSecondary);
+
+    const email = emailPrimary;
     const amount = payment.amount;
     const paymentId = payment.id;
     const status = payment.status;
